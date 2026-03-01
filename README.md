@@ -118,7 +118,7 @@ uv run -m src.transform.metrics
 
 ## Orquestração com Airflow
 
-O pipeline pode ser orquestrado pelo Apache Airflow via Docker Compose, com monitoramento visual, retry automático e logs centralizados.
+O pipeline pode ser orquestrado pelo Apache Airflow via Docker Compose, com monitoramento visual, retry automático, validação pós-execução e logs centralizados.
 
 ### Arquitetura dos Serviços
 
@@ -136,6 +136,9 @@ O pipeline pode ser orquestrado pelo Apache Airflow via Docker Compose, com moni
 ```bash
 # Subir todos os serviços
 docker compose up -d
+
+# Rebuild após alterações no código
+docker compose up -d --build
 
 # Acompanhar os logs (opcional)
 docker compose logs -f airflow-webserver
@@ -155,9 +158,44 @@ A DAG executa o pipeline completo na seguinte ordem:
 ingest → transform_bronze → transform_silver → transform_gold
 ```
 
-- **Trigger manual** — a DAG não possui agendamento automático
-- Para executar, clique no botão ▶ **Trigger DAG** na interface
-- Use o parâmetro `year_month` (ex: `2026-03`) para especificar o período
+- **Agendamento automático**: dia 20 de cada mês às 00:00 UTC
+- **Trigger manual**: clique em ▶ **Trigger DAG w/ config** a qualquer momento
+- **Parâmetro `year_month`**: define o período a processar (ex: `2026-02`). Se vazio, usa o mês atual
+
+Exemplo de configuração ao disparar manualmente:
+
+```json
+{"year_month": "2026-02"}
+```
+
+### Validação Automática
+
+Cada task possui validação pré e pós-execução que levanta `AirflowException` se:
+- O diretório de entrada não existe ou está vazio (pré)
+- O diretório de saída não foi gerado ou ficou vazio (pós)
+
+Isso evita "sucesso falso" — tasks só passam se os dados forem realmente processados.
+
+### Volumes (Dados Compartilhados)
+
+Os diretórios do projeto são montados no container via **bind mount**. Os arquivos **não são duplicados** — host e container acessam os mesmos dados:
+
+| Host | Container |
+|---|---|
+| `./data/` | `/opt/airflow/data/` |
+| `./dags/` | `/opt/airflow/dags/` |
+| `./src/` | `/opt/airflow/src/` |
+| `./core/` | `/opt/airflow/core/` |
+
+### Debugging
+
+| Método | Comando / Ação |
+|---|---|
+| **Log da task (UI)** | DAG → clique na task → aba **Log** |
+| **Erros de import** | `docker compose exec airflow-webserver airflow dags list-import-errors` |
+| **Logs do worker** | `docker compose logs --tail=50 airflow-worker` |
+| **Logs do scheduler** | `docker compose logs --tail=50 airflow-scheduler` |
+| **Explorar container** | `docker compose exec airflow-worker bash` |
 
 ### Expandir o Pipeline
 
