@@ -9,8 +9,8 @@ def run_ingestion():
     ingest_main()
 
 def run_transform():
-    from src.transform.main import main as transform_main
-    transform_main()
+    from src.transform.main import run_all as transform_run_all
+    transform_run_all()
 
 parser = argparse.ArgumentParser(description="CNPJ Datalake")
 parser.add_argument("--ingest", action="store_true", help="Run ingestion")
