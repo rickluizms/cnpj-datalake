@@ -14,5 +14,8 @@ dependencies = [
     "pytest>=8.0.0",
 ]
 
+[project.optional-dependencies]
+airflow = ["apache-airflow>=2.10.0"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]

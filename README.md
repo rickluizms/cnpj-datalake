@@ -22,9 +22,13 @@ data/gold/{YYYY-MM}/
 cnpj-datalake/
 ├── main.py                        # CLI principal
 ├── pyproject.toml                 # Dependências e configuração
+├── Dockerfile                     # Imagem para Airflow
+├── docker-compose.yml             # Serviços Airflow + Postgres + Redis
 ├── core/
 │   ├── db.py                      # Utilitários de banco de dados
 │   └── progress.py                # Barra de progresso Rich
+├── dags/
+│   └── cnpj_pipeline_dag.py       # DAG do Airflow
 ├── src/
 │   ├── ingest/
 │   │   └── main.py                # Download async via WebDAV (httpx)
@@ -32,7 +36,7 @@ cnpj-datalake/
 │       ├── main.py                # Orquestrador do pipeline
 │       ├── bronze.py              # Raw ZIP/CSV → Parquet
 │       ├── silver.py              # Limpeza, tipagem, normalização
-│       ├── gold.py                # Relacional + Dimensional + Analytics
+│       ├── gold/                  # Relacional + Dimensional + Analytics
 │       ├── schemas.py             # Definição de colunas e tipos
 │       └── metrics.py             # Relatório de volumetria
 └── tests/
@@ -44,6 +48,7 @@ cnpj-datalake/
 
 - **Python** ≥ 3.10
 - **[uv](https://docs.astral.sh/uv/)** (gerenciador de pacotes)
+- **[Docker](https://docs.docker.com/get-docker/)** e **Docker Compose** (para Airflow)
 
 ## Instalação
 
@@ -109,6 +114,65 @@ uv run -m src.transform.main --period 2026-02
 
 ```bash
 uv run -m src.transform.metrics
+```
+
+## Orquestração com Airflow
+
+O pipeline pode ser orquestrado pelo Apache Airflow via Docker Compose, com monitoramento visual, retry automático e logs centralizados.
+
+### Arquitetura dos Serviços
+
+| Serviço | Descrição | Porta |
+|---|---|---|
+| `postgres` | Banco de metadados do Airflow | 5432 |
+| `redis` | Broker para Celery (executor distribuído) | 6379 |
+| `airflow-webserver` | Interface web do Airflow | **8080** |
+| `airflow-scheduler` | Agendamento e disparo de DAGs | — |
+| `airflow-worker` | Execução das tasks (CeleryExecutor) | — |
+| `airflow-init` | Inicialização (migração do DB + criação do admin) | — |
+
+### Inicializar o Airflow
+
+```bash
+# Subir todos os serviços
+docker compose up -d
+
+# Acompanhar os logs (opcional)
+docker compose logs -f airflow-webserver
+```
+
+### Acessar a Interface
+
+Abra **http://localhost:8080** no navegador:
+- **Usuário:** `admin`
+- **Senha:** `admin`
+
+### DAG: `cnpj_pipeline`
+
+A DAG executa o pipeline completo na seguinte ordem:
+
+```
+ingest → transform_bronze → transform_silver → transform_gold
+```
+
+- **Trigger manual** — a DAG não possui agendamento automático
+- Para executar, clique no botão ▶ **Trigger DAG** na interface
+- Use o parâmetro `year_month` (ex: `2026-03`) para especificar o período
+
+### Expandir o Pipeline
+
+Para adicionar as etapas de carga, descomente os stubs em `dags/cnpj_pipeline_dag.py`:
+
+```
+transform_gold → load_relacional
+transform_gold → load_dimensional
+```
+
+### Parar o Airflow
+
+```bash
+docker compose down        # Para os containers
+docker compose down -v     # Para e remove os volumes (reset completo)
 ```
 
 ## Testes
@@ -179,5 +243,7 @@ uv run pytest tests/test_data_quality.py -s
 | [Polars](https://pola.rs/) | Processamento de dados (DataFrames) |
 | [httpx](https://www.python-httpx.org/) | Downloads assíncronos via WebDAV |
 | [Rich](https://rich.readthedocs.io/) | Interface CLI (progresso, tabelas, cores) |
+| [Apache Airflow](https://airflow.apache.org/) | Orquestração do pipeline (DAGs) |
+| [Docker](https://www.docker.com/) | Containerização dos serviços |
 | [pytest](https://docs.pytest.org/) | Testes automatizados |
 | [uv](https://docs.astral.sh/uv/) | Gerenciamento de pacotes e ambiente |
