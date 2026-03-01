@@ -14,7 +14,7 @@ BASE_HOST = os.getenv("BASE_HOST")
 SHARE_ID = os.getenv("SHARE_ID")
 WEBDAV_URL = f"{BASE_HOST}/public.php/webdav"
 
-YEAR_MONTH = time.strftime("%Y-%m")
+
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
@@ -35,9 +35,9 @@ FILES_CONFIG = [
 ]
 
 
-async def download_via_webdav(client: httpx.AsyncClient, file_name: str, base_dir: str, progress, overall_task_id):
+async def download_via_webdav(client: httpx.AsyncClient, file_name: str, base_dir: str, year_month: str, progress, overall_task_id):
     """Download via WebDAV do Nextcloud (public share) com retry e progress."""
-    url = f"{WEBDAV_URL}/{YEAR_MONTH}/{file_name}"
+    url = f"{WEBDAV_URL}/{year_month}/{file_name}"
     os.makedirs(base_dir, exist_ok=True)
     file_path = os.path.join(base_dir, file_name)
     task_id = None
@@ -98,8 +98,9 @@ async def download_via_webdav(client: httpx.AsyncClient, file_name: str, base_di
                 raise  # Re-raise para ser capturado pelo gather
 
 
-async def main():
-    base_dir = f"data/raw/{YEAR_MONTH}"
+async def main(year_month: str | None = None):
+    year_month = year_month or time.strftime("%Y-%m")
+    base_dir = f"data/raw/{year_month}"
 
     all_files = []
     for file_name, is_partitioned in FILES_CONFIG:
@@ -119,7 +120,7 @@ async def main():
 
         async with httpx.AsyncClient(timeout=None) as client:
             tasks = [
-                download_via_webdav(client, file_name, base_dir, progress, overall_task_id)
+                download_via_webdav(client, file_name, base_dir, year_month, progress, overall_task_id)
                 for file_name in all_files
             ]
 
@@ -141,8 +142,8 @@ async def main():
     _c.print(f"\n[bold magenta]Ingestão concluída em {minutes}m {seconds}s — {ok_count}/{len(all_files)} arquivos baixados[/]\n")
 
 
-def run():
-    asyncio.run(main())
+def run(year_month: str | None = None):
+    asyncio.run(main(year_month))
 
 
 if __name__ == "__main__":
